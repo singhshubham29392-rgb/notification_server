@@ -17,14 +17,38 @@ function initFirebase() {
   if (firebaseInitialized) return;
 
   try {
-    // 1. Check FIREBASE_SERVICE_ACCOUNT environment variable (for Render / Vercel)
+    // 1. Check individual environment variables (Most reliable in Render/Vercel)
+    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      let pKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+      if ((pKey.startsWith('"') && pKey.endsWith('"')) || (pKey.startsWith("'") && pKey.endsWith("'"))) {
+        pKey = pKey.slice(1, -1);
+      }
+      pKey = pKey.replace(/\\n/g, '\n');
+
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID.trim(),
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
+          privateKey: pKey,
+        }),
+      });
+      firebaseInitialized = true;
+      firebaseInitError = null;
+      console.log('✅ Firebase Admin initialized via individual env vars.');
+      return;
+    }
+
+    // 2. Check FIREBASE_SERVICE_ACCOUNT environment variable
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       let rawEnv = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
 
-      // If Base64 encoded, decode it first
+      // Decode base64 if needed
       if (!rawEnv.startsWith('{') && !rawEnv.startsWith('"')) {
         try {
-          rawEnv = Buffer.from(rawEnv, 'base64').toString('utf8').trim();
+          const decoded = Buffer.from(rawEnv, 'base64').toString('utf8').trim();
+          if (decoded.startsWith('{')) {
+            rawEnv = decoded;
+          }
         } catch (_) {}
       }
 
@@ -32,8 +56,11 @@ function initFirebase() {
       try {
         serviceAccount = JSON.parse(rawEnv);
       } catch (e1) {
-        // Try fixing raw unescaped newlines in JSON strings
-        const sanitized = rawEnv.replace(/\r?\n/g, '\\n');
+        // Fix unescaped newlines or missing trailing brace
+        let sanitized = rawEnv.replace(/\r?\n/g, '\\n');
+        if (!sanitized.endsWith('}')) {
+          sanitized += '}';
+        }
         serviceAccount = JSON.parse(sanitized);
       }
 
@@ -47,22 +74,6 @@ function initFirebase() {
       firebaseInitialized = true;
       firebaseInitError = null;
       console.log('✅ Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var.');
-      return;
-    }
-
-    // 2. Check individual environment variables
-    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: privateKey,
-        }),
-      });
-      firebaseInitialized = true;
-      firebaseInitError = null;
-      console.log('✅ Firebase Admin initialized via individual env vars.');
       return;
     }
 
