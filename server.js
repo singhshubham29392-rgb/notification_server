@@ -140,15 +140,6 @@ function initFirebase() {
   }
   console.warn('⚠️ WARNING: Firebase Admin credentials not found/initialized yet. ' + firebaseInitError);
 }
-    }
-
-    firebaseInitError = 'FIREBASE_SERVICE_ACCOUNT environment variable is not set in Render dashboard.';
-    console.warn('⚠️ WARNING: Firebase Admin credentials not found! Set FIREBASE_SERVICE_ACCOUNT env var.');
-  } catch (err) {
-    firebaseInitError = err.message || String(err);
-    console.error('❌ Failed to initialize Firebase Admin SDK:', err.message);
-  }
-}
 
 initFirebase();
 
