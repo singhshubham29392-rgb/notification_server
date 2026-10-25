@@ -16,18 +16,39 @@ function initFirebase() {
   if (firebaseInitialized) return;
 
   try {
-    // Check if SERVICE_ACCOUNT_JSON environment variable exists (for Render / Vercel)
+    // 1. Check FIREBASE_SERVICE_ACCOUNT environment variable (for Render / Vercel)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      let rawEnv = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+
+      // If Base64 encoded, decode it first
+      if (!rawEnv.startsWith('{') && !rawEnv.startsWith('"')) {
+        try {
+          rawEnv = Buffer.from(rawEnv, 'base64').toString('utf8').trim();
+        } catch (_) {}
+      }
+
+      let serviceAccount;
+      try {
+        serviceAccount = JSON.parse(rawEnv);
+      } catch (e1) {
+        // Try fixing raw unescaped newlines in JSON strings
+        const sanitized = rawEnv.replace(/\r?\n/g, '\\n');
+        serviceAccount = JSON.parse(sanitized);
+      }
+
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
       firebaseInitialized = true;
-      console.log('Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var.');
+      console.log('✅ Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var.');
       return;
     }
 
-    // Check individual environment variables
+    // 2. Check individual environment variables
     if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
       const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
       admin.initializeApp({
@@ -38,11 +59,11 @@ function initFirebase() {
         }),
       });
       firebaseInitialized = true;
-      console.log('Firebase Admin initialized via individual env vars.');
+      console.log('✅ Firebase Admin initialized via individual env vars.');
       return;
     }
 
-    // Check local serviceAccountKey.json file
+    // 3. Check local serviceAccountKey.json file
     const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
     if (fs.existsSync(serviceAccountPath)) {
       const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
@@ -50,11 +71,11 @@ function initFirebase() {
         credential: admin.credential.cert(serviceAccount),
       });
       firebaseInitialized = true;
-      console.log('Firebase Admin initialized via local serviceAccountKey.json.');
+      console.log('✅ Firebase Admin initialized via local serviceAccountKey.json.');
       return;
     }
 
-    console.warn('⚠️ WARNING: Firebase Admin credentials not found! Set FIREBASE_SERVICE_ACCOUNT env var or add serviceAccountKey.json.');
+    console.warn('⚠️ WARNING: Firebase Admin credentials not found! Set FIREBASE_SERVICE_ACCOUNT env var.');
   } catch (err) {
     console.error('❌ Failed to initialize Firebase Admin SDK:', err.message);
   }
