@@ -11,6 +11,7 @@ app.use(express.json());
 
 // ── 1. Initialize Firebase Admin SDK ──────────────────────────────────────────
 let firebaseInitialized = false;
+let firebaseInitError = null;
 
 function initFirebase() {
   if (firebaseInitialized) return;
@@ -44,6 +45,7 @@ function initFirebase() {
         credential: admin.credential.cert(serviceAccount),
       });
       firebaseInitialized = true;
+      firebaseInitError = null;
       console.log('✅ Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var.');
       return;
     }
@@ -59,6 +61,7 @@ function initFirebase() {
         }),
       });
       firebaseInitialized = true;
+      firebaseInitError = null;
       console.log('✅ Firebase Admin initialized via individual env vars.');
       return;
     }
@@ -71,12 +74,15 @@ function initFirebase() {
         credential: admin.credential.cert(serviceAccount),
       });
       firebaseInitialized = true;
+      firebaseInitError = null;
       console.log('✅ Firebase Admin initialized via local serviceAccountKey.json.');
       return;
     }
 
+    firebaseInitError = 'FIREBASE_SERVICE_ACCOUNT environment variable is not set in Render dashboard.';
     console.warn('⚠️ WARNING: Firebase Admin credentials not found! Set FIREBASE_SERVICE_ACCOUNT env var.');
   } catch (err) {
+    firebaseInitError = err.message || String(err);
     console.error('❌ Failed to initialize Firebase Admin SDK:', err.message);
   }
 }
@@ -99,10 +105,14 @@ function stringifyDataObject(data) {
 
 // Health check endpoint
 app.get('/', (req, res) => {
+  if (!firebaseInitialized) {
+    initFirebase();
+  }
   res.status(200).json({
     status: 'ok',
     message: 'Cubbit Push Notification Backend is active',
     firebaseStatus: firebaseInitialized ? 'Connected' : 'Not Connected',
+    firebaseError: firebaseInitialized ? null : firebaseInitError,
     timestamp: new Date().toISOString(),
   });
 });
